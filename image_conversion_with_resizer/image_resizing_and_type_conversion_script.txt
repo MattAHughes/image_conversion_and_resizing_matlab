@@ -1,0 +1,318 @@
+classdef image_resizing_and_type_conversion < matlab.apps.AppBase
+
+    % Properties that correspond to app components
+    properties (Access = public)
+        UIFigure                    matlab.ui.Figure
+        ImageLoadLocationEditFieldLabel  matlab.ui.control.Label
+        ImageLoadLocationEditField  matlab.ui.control.EditField
+        SelectFolderButton          matlab.ui.control.Button
+        ConvertImagesButton         matlab.ui.control.Button
+        ExitButton                  matlab.ui.control.Button
+        SelectFileTypetoConvertImagesTooDropDownLabel  matlab.ui.control.Label
+        SelectFileTypetoConvertImagesTooDropDown  matlab.ui.control.DropDown
+        ImageSaveLocationEditFieldLabel  matlab.ui.control.Label
+        ImageSaveLocationEditField  matlab.ui.control.EditField
+        SelectFolderButton_2        matlab.ui.control.Button
+        SavedImageSizePixelsKeepsAspectRatioDropDownLabel  matlab.ui.control.Label
+        SavedImageSizePixelsKeepsAspectRatioDropDown  matlab.ui.control.DropDown
+    end
+
+    
+    properties (Access = private)
+        dirname %variable names to pass between buttons, this is load directory for images
+        dirname2 %This is save directory for images
+        type %This is the save file format
+        TypeString %Automates Saving
+        resolution %the resolution at which the images are saved
+        SaveSize %the size of the saved image in square pixels count
+    end
+    
+
+    % Callbacks that handle component events
+    methods (Access = private)
+
+        % Button pushed function: SelectFolderButton
+        function SelectFolderButtonPushed(app, event)
+            dirname=uigetdir;
+            app.ImageLoadLocationEditField.Value=dirname;
+            app.dirname=dirname;
+            cd(dirname)
+            figure(app.UIFigure) %This cheeky line solves the problems of the UI being sent to the background 
+            %(Below all other open windows) instead of being returned too
+            %You can see it functioning when the UI flickers mildly on
+            %folder selection.
+        end
+
+        % Button pushed function: SelectFolderButton_2
+        function SelectFolderButton_2Pushed(app, event)
+            dirname2=uigetdir;
+            app.ImageSaveLocationEditField.Value=dirname2;
+            dirname2=strcat(dirname2,'\');
+            app.dirname2=dirname2;
+            figure(app.UIFigure)
+        end
+
+        % Value changed function: 
+        % SelectFileTypetoConvertImagesTooDropDown
+        function SelectFileTypetoConvertImagesTooDropDownValueChanged(app, event)
+            type = app.SelectFileTypetoConvertImagesTooDropDown.Value;
+            TypeString=type(end-2:end);
+            TypeString=strcat('-d',TypeString);
+            app.TypeString=TypeString;
+            app.type=type;
+        end
+
+        % Value changed function: 
+        % SavedImageSizePixelsKeepsAspectRatioDropDown
+        function SavedImageSizePixelsKeepsAspectRatioDropDownValueChanged(app, event)
+            value = app.SavedImageSizePixelsKeepsAspectRatioDropDown.Value;
+            app.SaveSize=value;
+        end
+
+        % Button pushed function: ConvertImagesButton
+        function ConvertImagesButtonPushed(app, event)
+         dirName = app.dirname;   %# folder path for where the files are located
+files = dir(app.dirname);   %# list all files in the directory
+files = {files.name}';                   % file names
+%___________________________________
+for i=3:length(files) %length(files) lets us get all files, . and .. register as file names in all folders (probably as a hidden file) so we start from 3
+    try %Try allows us to handles errors with the path specified by catch, which is important as images as finniky and do what they please sometimes, so can throw up an error in the oddest of situations
+fname={files{i}}; %files{i} contains the file extensions in the names so this is redundant, but kept anyway
+[A,C,T]=  imread(fname{1}); %image reads each of the files in the current directory
+if length(T)==0 %Some png files have transparency, others do not (in which case length(T)=0
+[A,C]=imread(fname{1}); % read the image file
+A=imsharpen(A,'Amount',2); %Comment this out at times when it causes artifacts, or vary 5 down
+A=imresize(A,[str2num(app.SaveSize) NaN]);
+try
+C=imresize(C,[str2num(app.SaveSize) NaN]);
+catch
+end
+h=imshow(A,C); % plot the image with the colourmap (THIS WAS THE SOURCE OF MY PROBLEM) don't forget the colourmap or it often will give you a lovely black box to look at instead of the image (since it will guess the colours based on A)
+h.HandleVisibility='on';
+set(gcf,'Position',[40 40 str2num(app.SaveSize) str2num(app.SaveSize)])
+%str1=sprintf('example_%d',i-2); %This was purely for testing
+stringy=files{i}(1:end-4); %This is to get the correct file names for saving as
+str2=app.dirname2; % Where we would like to save the files 
+string=strcat(str2,stringy,app.type); %what we would like to save the files as
+try
+    imwrite(A,C,string,'Alpha',T)
+catch
+    try
+    imwrite(A,string,'Alpha',T)
+    catch
+        try
+             imwrite(A,C,string)
+        catch
+            imwrite(A,string)
+        end
+    end
+end %save directory here
+close all
+else
+A=imsharpen(A,'Amount',2);
+A=imresize(A,[str2num(app.SaveSize) NaN]);
+try
+C=imresize(C,[str2num(app.SaveSize) NaN]);
+catch
+end
+try
+T=imresize(T,[str2num(app.SaveSize) NaN]);
+catch
+end
+h=imshow(A,C); % plot the image with the colourmap (THIS WAS THE SOURCE OF MY PROBLEM) don't forget the colourmap or it often will give you a lovely black box to look at instead of the image (since it will guess the colours based on A)
+h.HandleVisibility='on';
+h.HandleVisibility='on';
+h.AlphaData=T; %As above, but this is the case with transparency (called alpha) T
+set(gcf,'Position',[40 40 str2num(app.SaveSize) str2num(app.SaveSize)])
+str1=sprintf('example_%d',i-2);
+stringy=files{i}(1:end-4);
+str2=app.dirname2;
+string=strcat(str2,stringy,app.type);
+try
+    imwrite(A,C,string,'Alpha',T)
+catch
+    try
+    imwrite(A,string,'Alpha',T)
+    catch
+        try
+             imwrite(A,C,string)
+        catch
+            imwrite(A,string)
+        end
+    end
+end %save directory here
+close all
+end
+    catch ME %This is for when there is an error, such as transparancy not being empty, but impossible to derive, which would usually throw an error and exit the image conversion loop
+fname={files{i}}; 
+[A,C]=imread(fname{1}); %In this case we would take the path which does not require transparency information
+A=imsharpen(A,'Amount',2);
+try
+A=imresize(A,[str2num(app.SaveSize) NaN]);
+try
+C=imresize(C,[str2num(app.SaveSize) NaN]);
+catch
+end
+try
+T=imresize(T,[str2num(app.SaveSize) NaN]);
+catch
+end
+h=imshow(A,C);
+catch
+ fname={files{i}};
+[A,C]=imread(fname{1}); %In this case we would take the path which does not require transparency information
+A=imsharpen(A);
+h=imshow(A,C);
+end
+% plot the image with the colourmap (THIS WAS THE SOURCE OF MY PROBLEM) don't forget the colourmap or it often will give you a lovely black box to look at instead of the image (since it will guess the colours based on A)
+h.HandleVisibility='on';
+set(gcf,'Position',[40 40 str2num(app.SaveSize) str2num(app.SaveSize)])
+str1=sprintf('example_%d',i-2);
+stringy=files{i}(1:end-4);
+str2=app.dirname2;
+string=strcat(str2,stringy,app.type);
+try
+    imwrite(A,C,string,'Alpha',T)
+catch
+    try
+    imwrite(A,string,'Alpha',T)
+    catch
+        try
+             imwrite(A,C,string)
+        catch
+            imwrite(A,string)
+        end
+    end
+end %save directory here
+close all
+    end
+clear A T C %Clear variables between loops
+end
+f = msgbox('Operation Completed','Success');
+        end
+
+        % Button pushed function: ExitButton
+        function ExitButtonPushed(app, event)
+            closereq()
+        end
+    end
+
+    % Component initialization
+    methods (Access = private)
+
+        % Create UIFigure and components
+        function createComponents(app)
+
+            % Create UIFigure and hide until all components are created
+            app.UIFigure = uifigure('Visible', 'off');
+            app.UIFigure.Color = [0.6706 0.9098 0.502];
+            app.UIFigure.Position = [100 100 640 480];
+            app.UIFigure.Name = 'MATLAB App';
+
+            % Create ImageLoadLocationEditFieldLabel
+            app.ImageLoadLocationEditFieldLabel = uilabel(app.UIFigure);
+            app.ImageLoadLocationEditFieldLabel.HorizontalAlignment = 'right';
+            app.ImageLoadLocationEditFieldLabel.FontWeight = 'bold';
+            app.ImageLoadLocationEditFieldLabel.Position = [38 369 126 22];
+            app.ImageLoadLocationEditFieldLabel.Text = 'Image Load Location';
+
+            % Create ImageLoadLocationEditField
+            app.ImageLoadLocationEditField = uieditfield(app.UIFigure, 'text');
+            app.ImageLoadLocationEditField.Position = [179 369 247 22];
+            app.ImageLoadLocationEditField.Value = 'Folder Name';
+
+            % Create SelectFolderButton
+            app.SelectFolderButton = uibutton(app.UIFigure, 'push');
+            app.SelectFolderButton.ButtonPushedFcn = createCallbackFcn(app, @SelectFolderButtonPushed, true);
+            app.SelectFolderButton.Position = [448 369 100 22];
+            app.SelectFolderButton.Text = 'Select Folder';
+
+            % Create ConvertImagesButton
+            app.ConvertImagesButton = uibutton(app.UIFigure, 'push');
+            app.ConvertImagesButton.ButtonPushedFcn = createCallbackFcn(app, @ConvertImagesButtonPushed, true);
+            app.ConvertImagesButton.FontWeight = 'bold';
+            app.ConvertImagesButton.Position = [442 60 106 78];
+            app.ConvertImagesButton.Text = 'Convert Images';
+
+            % Create ExitButton
+            app.ExitButton = uibutton(app.UIFigure, 'push');
+            app.ExitButton.ButtonPushedFcn = createCallbackFcn(app, @ExitButtonPushed, true);
+            app.ExitButton.Position = [442 23 106 22];
+            app.ExitButton.Text = 'Exit';
+
+            % Create SelectFileTypetoConvertImagesTooDropDownLabel
+            app.SelectFileTypetoConvertImagesTooDropDownLabel = uilabel(app.UIFigure);
+            app.SelectFileTypetoConvertImagesTooDropDownLabel.HorizontalAlignment = 'right';
+            app.SelectFileTypetoConvertImagesTooDropDownLabel.FontWeight = 'bold';
+            app.SelectFileTypetoConvertImagesTooDropDownLabel.Position = [38 257 229 22];
+            app.SelectFileTypetoConvertImagesTooDropDownLabel.Text = 'Select File Type to Convert Images Too';
+
+            % Create SelectFileTypetoConvertImagesTooDropDown
+            app.SelectFileTypetoConvertImagesTooDropDown = uidropdown(app.UIFigure);
+            app.SelectFileTypetoConvertImagesTooDropDown.Items = {'--Convert To--', '.bmp', '.jpg', '.png', '.tif'};
+            app.SelectFileTypetoConvertImagesTooDropDown.ValueChangedFcn = createCallbackFcn(app, @SelectFileTypetoConvertImagesTooDropDownValueChanged, true);
+            app.SelectFileTypetoConvertImagesTooDropDown.Position = [388 257 161 22];
+            app.SelectFileTypetoConvertImagesTooDropDown.Value = '--Convert To--';
+
+            % Create ImageSaveLocationEditFieldLabel
+            app.ImageSaveLocationEditFieldLabel = uilabel(app.UIFigure);
+            app.ImageSaveLocationEditFieldLabel.HorizontalAlignment = 'right';
+            app.ImageSaveLocationEditFieldLabel.FontWeight = 'bold';
+            app.ImageSaveLocationEditFieldLabel.Position = [40 319 125 22];
+            app.ImageSaveLocationEditFieldLabel.Text = 'Image Save Location';
+
+            % Create ImageSaveLocationEditField
+            app.ImageSaveLocationEditField = uieditfield(app.UIFigure, 'text');
+            app.ImageSaveLocationEditField.Position = [180 319 247 22];
+            app.ImageSaveLocationEditField.Value = 'Folder Name';
+
+            % Create SelectFolderButton_2
+            app.SelectFolderButton_2 = uibutton(app.UIFigure, 'push');
+            app.SelectFolderButton_2.ButtonPushedFcn = createCallbackFcn(app, @SelectFolderButton_2Pushed, true);
+            app.SelectFolderButton_2.Position = [450 319 100 22];
+            app.SelectFolderButton_2.Text = 'Select Folder';
+
+            % Create SavedImageSizePixelsKeepsAspectRatioDropDownLabel
+            app.SavedImageSizePixelsKeepsAspectRatioDropDownLabel = uilabel(app.UIFigure);
+            app.SavedImageSizePixelsKeepsAspectRatioDropDownLabel.HorizontalAlignment = 'right';
+            app.SavedImageSizePixelsKeepsAspectRatioDropDownLabel.FontWeight = 'bold';
+            app.SavedImageSizePixelsKeepsAspectRatioDropDownLabel.Position = [38 193 289 22];
+            app.SavedImageSizePixelsKeepsAspectRatioDropDownLabel.Text = 'Saved Image Size -- Pixels -- Keeps Aspect Ratio';
+
+            % Create SavedImageSizePixelsKeepsAspectRatioDropDown
+            app.SavedImageSizePixelsKeepsAspectRatioDropDown = uidropdown(app.UIFigure);
+            app.SavedImageSizePixelsKeepsAspectRatioDropDown.Items = {'--Pixel Width--', '150', '200', '250', '300', '400', '500', '750', '1000', '1250'};
+            app.SavedImageSizePixelsKeepsAspectRatioDropDown.ValueChangedFcn = createCallbackFcn(app, @SavedImageSizePixelsKeepsAspectRatioDropDownValueChanged, true);
+            app.SavedImageSizePixelsKeepsAspectRatioDropDown.Position = [388 193 161 22];
+            app.SavedImageSizePixelsKeepsAspectRatioDropDown.Value = '--Pixel Width--';
+
+            % Show the figure after all components are created
+            app.UIFigure.Visible = 'on';
+        end
+    end
+
+    % App creation and deletion
+    methods (Access = public)
+
+        % Construct app
+        function app = image_resizing_and_type_conversion
+
+            % Create UIFigure and components
+            createComponents(app)
+
+            % Register the app with App Designer
+            registerApp(app, app.UIFigure)
+
+            if nargout == 0
+                clear app
+            end
+        end
+
+        % Code that executes before app deletion
+        function delete(app)
+
+            % Delete UIFigure when app is deleted
+            delete(app.UIFigure)
+        end
+    end
+end
